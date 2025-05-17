@@ -6,6 +6,6 @@ Inputs:
 Outputs:
 
 */
-module gb_ppu();
+module gb_ppu ();
 
 endmodule : gb_ppu
