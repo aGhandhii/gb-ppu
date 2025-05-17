@@ -1,3 +1,0 @@
-./inc/gb_ppu_common_pkg.sv
-./src/gb_ppu.sv
-./test/gb_ppu_tb.sv
