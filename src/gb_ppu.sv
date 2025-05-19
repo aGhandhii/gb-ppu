@@ -1,16 +1,29 @@
 import gb_ppu_common_pkg::*;
+import gb_oam_pkg::*;
 /* Top Level Module for GameBoy PPU
 
 Inputs:
-    clk         - System Clock (T Clock, ~4MHz)
-    reset       - System Reset
-    addr        - 16-Bit Address Bus
-    data_i      - 8-Bit Input Data
+    clk             - System Clock (T Clock, ~4MHz)
+    reset           - System Reset
+    addr            - 16-Bit Address Bus
+    data_i          - 8-Bit Input Data
 
 Outputs:
-    data_o      - 8-bit Output Data
+    data_o          - 8-bit Output Data
+    irq_stat        - STAT Interrupt Request Line
+    dma_start       - Start DMA Transfer
+    dma_start_addr  - Start Address for DMA Transfer
 */
-module gb_ppu ();
+module gb_ppu (
+    input  logic        clk,
+    input  logic        reset,
+    input  logic [15:0] addr,
+    input  logic [ 7:0] data_i,
+    output logic [ 7:0] data_o,
+    output logic        irq_stat,
+    output logic        dma_start,
+    output logic        dma_start_addr
+);
 
     // Store PPU state information
     ppu_mode_state_t ppu_mode;
@@ -23,10 +36,6 @@ module gb_ppu ();
         0xFF44 - LY   (LCD Y-Coordinate) (READ-ONLY)
         0xFF45 - LYC  (LCD Y-Coordinate Compare)
         0xFF46 - DMA  (OAM DMA Source Address and Start)
-            - Starts DMA transfer, takes 640 T-Cycles (160 M-Cycles)
-                - Register value can range from [0x00-0xDF]
-                - Start Address is 0x00XX, where XX is the register value
-            - CPU can only access HRAM (0xFF80-0xFFFE) during DMA Transfer
         0xFF47 - BGP  (Background Palette Data)
         0xFF48 - OBP0 (Object Palette 0)
         0xFF49 - OBP1 (Object Palette 1)
@@ -34,19 +43,7 @@ module gb_ppu ();
         0xFF4B - WX   (Window X Position + 7)
     */
     logic [7:0]
-        reg_LCDC,
-        reg_STAT,
-        reg_SCY,
-        reg_SCX,
-        reg_LY,
-        reg_LYC
-        ,\
-        reg_DMA,
-        reg_BGP,
-        reg_OBP0,
-        reg_OBP1,
-        reg_WY,
-        reg_WX;
+        reg_LCDC, reg_STAT, reg_SCY, reg_SCX, reg_LY, reg_LYC, reg_DMA, reg_BGP, reg_OBP0, reg_OBP1, reg_WY, reg_WX;
 
     // Store LCDC register signals
     lcd_control_t LCDC;
@@ -90,5 +87,8 @@ module gb_ppu ();
     end
 
 
+
+    // When reg_DMA is written to, raise the dma start signal for 4 T-cycles
+    assign dma_start_addr = {reg_DMA, 8'h00};
 
 endmodule : gb_ppu

@@ -17,7 +17,24 @@ package gb_ppu_common_pkg;
         PUSH
     } fifo_pixel_fetcher_state_t;
 
+    // Enumerated Pixel Colors
+    typedef enum logic [1:0] {
+        WHITE      = 2'b00,
+        LIGHT_GREY = 2'b01,
+        DARK_GREY  = 2'b10,
+        BLACK      = 2'b11
+    } pixel_color_t;
 
+
+    // Each Pixel in the FIFO contains these properties
+    typedef struct packed {
+        pixel_color_t color;
+        logic         obj_palette;
+        logic         bg_priority;
+    } fifo_pixel_t;
+
+
+    // PPU REGISTER ABSTRACTIONS {{{
 
     // LCDC Register Signals
     typedef struct packed {
@@ -33,21 +50,13 @@ package gb_ppu_common_pkg;
 
     // STAT Register Signals
     typedef struct packed {
-        logic            lyc_irq_cond;     // LY==LYC STAT interrupt request
+        logic            lyc_irq_cond;     // LY==LYC    STAT interrupt request
         logic            mode_2_irq_cond;  // PPU Mode 2 STAT interrupt request
         logic            mode_1_irq_cond;  // PPU Mode 1 STAT interrupt request
         logic            mode_0_irq_cond;  // PPU Mode 0 STAT interrupt request
         logic            lyc_ly_compare;   // LY == LYC
         ppu_mode_state_t ppu_mode;         // PPU Mode
     } lcd_status_t;
-
-    // Enumerated Pixel Colors
-    typedef enum logic [1:0] {
-        WHITE      = 2'b00,
-        LIGHT_GREY = 2'b01,
-        DARK_GREY  = 2'b10,
-        BLACK      = 2'b11
-    } pixel_color_t;
 
     // Palette Registers
     typedef struct packed {
@@ -57,12 +66,6 @@ package gb_ppu_common_pkg;
         pixel_color_t id_3;
     } palette_register_t;
 
-
-    // Each Pixel in the FIFO contains these properties
-    typedef struct packed {
-        pixel_color_t color;
-        logic         obj_palette;
-        logic         bg_priority;
-    } fifo_pixel_t;
+    // }}}
 
 endpackage : gb_ppu_common_pkg
