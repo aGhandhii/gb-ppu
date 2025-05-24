@@ -28,9 +28,9 @@ package gb_ppu_common_pkg;
 
     // Each Pixel in the FIFO contains these properties
     typedef struct packed {
-        pixel_color_t color;
-        logic         obj_palette;
-        logic         bg_priority;
+        logic [1:0] color_index;  // Palette ID
+        logic       obj_palette;
+        logic       bg_priority;
     } fifo_pixel_t;
 
 

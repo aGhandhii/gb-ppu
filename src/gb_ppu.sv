@@ -10,31 +10,33 @@ Inputs:
     data_i          - 8-Bit Input Data
 
 Outputs:
+    ppu_mode        - Current PPU Mode
     data_o          - 8-bit Output Data
+    irq_vblank      - VBLANK Interrupt Request Line
     irq_stat        - STAT Interrupt Request Line
     dma_start       - Start DMA Transfer
     dma_start_addr  - Start Address for DMA Transfer
 */
 module gb_ppu (
-    input  logic        clk_t,
-    input  logic        clk_m,
-    input  logic        reset,
-    input  logic [15:0] addr,
-    input  logic [ 7:0] data_i,
-    output logic [ 7:0] data_o,
-    output logic        irq_stat,
-    output logic        dma_start,
-    output logic        dma_start_addr
+    input  logic                   clk_t,
+    input  logic                   clk_m,
+    input  logic                   reset,
+    input  logic            [15:0] addr,
+    input  logic            [ 7:0] data_i,
+    output ppu_mode_state_t        ppu_mode,
+    output logic            [ 7:0] data_o,
+    output logic                   irq_vblank,
+    output logic                   irq_stat,
+    output logic                   dma_start,
+    output logic                   dma_start_addr
 );
-
-    // Store PPU state information
-    ppu_mode_state_t ppu_mode;
 
     // For Interrupts, store whether PPU is in certain state
     logic in_mode_0, in_mode_1, in_mode_2;
     assign in_mode_0 = (ppu_mode == HBLANK) ? 1'b1 : 1'b0;
     assign in_mode_1 = (ppu_mode == VBLANK) ? 1'b1 : 1'b0;
     assign in_mode_2 = (ppu_mode == OAM_SCAN) ? 1'b1 : 1'b0;
+    assign irq_vblank = (ppu_mode = VBLANK);
 
     /* DMG PPU CONTROL REGISTERS (0xFF40-0xFF4B)
         0xFF40 - LCDC (LCD Control Register)
@@ -52,6 +54,9 @@ module gb_ppu (
     */
     logic [7:0]
         reg_LCDC, reg_STAT, reg_SCY, reg_SCX, reg_LY, reg_LYC, reg_DMA, reg_BGP, reg_OBP0, reg_OBP1, reg_WY, reg_WX;
+
+    // We want an additional register to store the current X-Coordinate
+    logic [7:0] reg_LX;
 
     // Store LCDC register signals
     lcd_control_t LCDC;
@@ -161,5 +166,49 @@ module gb_ppu (
             dma_start <= 1'b0;
         end
 
+
+    // Object Rendering
+
+    // For the OAM Scan stage, we grab objects that appear on the scanline
+    // We need to store up to 10 valid objects per scanline, and keep track of
+    // how many valid objects we obtain
+    oam_obj_t [9:0] obj_buffer;
+    logic [3:0] num_objects_found, curr_obj_buffer_index;
+
+
+    // Background and Window Rendering
+
+    // These point to Tile Maps (0x9800-0x9BFF and 0x9C00-0x9FFF)
+    // which are two 32x32 maps of 1-byte indices for tile data lookup.
+    // When combined with a base index specified in LCDC, this gets the address
+    // in Tile Data to render.
+    // The tile index is multiplied by 16 (add 4'b0000 to right end) then
+    // optionally sign-extended, for a total of 16 bits. This points to the
+    // first byte in the 16-byte section for a tile
+
+    // Base pointer for BG/Window tile map fetch
+    logic [15:0] bg_tile_map_base_ptr;
+    logic [15:0] win_tile_map_base_ptr;
+    assign bg_tile_map_base_ptr  = LCDC.bg_tile_map ? 16'h9C00 : 16'h9800;
+    assign win_tile_map_base_ptr = LCDC.win_tile_map ? 16'h9C00 : 16'h9800;
+
+    // Tile Data (0x8000-0x97FF) stores 384 8x8 tiles
+    // Each tile is 16 Bytes, where each line of the byte is stored in 2 bytes,
+    // the combination of these bytes represents the palette ID for the pixel.
+
+    /* How Tile Data Bytes are interpreted:
+
+    Byte 0 [7:0]            - a  b  c  d  e  f  g  h
+    Byte 1 [7:0]            - i  j  k  l  m  n  o  p
+    pixels (left to right)  - ia jb kc ld me nf og ph
+        - pixel values are a palette index
+        - note that MSb is the leftmost, and Byte 1 is MSb for palette index
+    */
+
+    // Base Pointer for BG/Window tile data fetch
+    // NOTE if addressing mode is 0, use signed arithmetic to get pointer
+    // (sign extend value in tile map before adding to base pointer)
+    logic [15:0] bg_win_tile_data_base_ptr;
+    assign bg_win_tile_data_base_ptr = LCDC.bg_win_tiles ? 16'h8000 : 16'h9000;
 
 endmodule : gb_ppu
