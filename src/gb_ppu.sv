@@ -69,7 +69,7 @@ module gb_ppu (
         LCDC.obj_size               = reg_LCDC[2];
         LCDC.obj_enable             = reg_LCDC[1];
         LCDC.bg_win_enable_priority = reg_LCDC[0];
-    end
+    end : setLCDCsignals
 
     // Store LCD Status Signals
     lcd_status_t STAT;
@@ -80,7 +80,7 @@ module gb_ppu (
         STAT.mode_0_irq_cond = reg_STAT[3];
         STAT.lyc_ly_compare  = (reg_LY == reg_LYC) ? 1'b1 : 1'b0;
         STAT.ppu_mode        = ppu_mode;
-    end
+    end : setSTATsignals
     assign reg_STAT[2] = STAT.lyc_ly_compare;
     assign reg_STAT[1:0] = STAT.ppu_mode;
 
@@ -105,7 +105,7 @@ module gb_ppu (
         OBP1.id_1 = pixel_color_t'(reg_OBP1[3:2]);
         OBP1.id_2 = pixel_color_t'(reg_OBP1[5:4]);
         OBP1.id_3 = pixel_color_t'(reg_OBP1[7:6]);
-    end
+    end : setPaletteRegisters
 
     // Specify DMA Start Address for Transfer
     assign dma_start_addr = {reg_DMA, 8'h00};
@@ -198,8 +198,8 @@ module gb_ppu (
 
     /* How Tile Data Bytes are interpreted:
 
-    Byte 0 [7:0]            - a  b  c  d  e  f  g  h
-    Byte 1 [7:0]            - i  j  k  l  m  n  o  p
+    Byte 0 [7:0]            -  a  b  c  d  e  f  g  h
+    Byte 1 [7:0]            -  i  j  k  l  m  n  o  p
     pixels (left to right)  - ia jb kc ld me nf og ph
         - pixel values are a palette index
         - note that MSb is the leftmost, and Byte 1 is MSb for palette index
