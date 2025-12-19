@@ -172,7 +172,16 @@ module gb_ppu (
     // For the OAM Scan stage, we grab objects that appear on the scanline
     // We need to store up to 10 valid objects per scanline, and keep track of
     // how many valid objects we obtain
-    oam_obj_t [9:0] obj_buffer;
+
+    // IDEA
+    // the object buffer will store validity as well as the OAM object
+    // we need the following info:
+    //  - a 'valid' bit (up to 10 objects, not all slots are used)
+    //    - this will be modified during the OAM scan
+    // in addition, when feeding the FIFO buffer we cascade the valid objects
+    //  - value in-frame with the lowest x value gets priority
+    //  - what if partial in frame? do we pad with 'transparent'?
+    obj_buffer_t [9:0] obj_buffer;
     logic [3:0] num_objects_found, curr_obj_buffer_index;
 
 
