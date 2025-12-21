@@ -33,10 +33,10 @@ module gb_ppu (
 
     // For Interrupts, store whether PPU is in certain state
     logic in_mode_0, in_mode_1, in_mode_2;
-    assign in_mode_0 = (ppu_mode == HBLANK) ? 1'b1 : 1'b0;
-    assign in_mode_1 = (ppu_mode == VBLANK) ? 1'b1 : 1'b0;
-    assign in_mode_2 = (ppu_mode == OAM_SCAN) ? 1'b1 : 1'b0;
-    assign irq_vblank = (ppu_mode = VBLANK);
+    assign in_mode_0  = (ppu_mode == HBLANK) ? 1'b1 : 1'b0;
+    assign in_mode_1  = (ppu_mode == VBLANK) ? 1'b1 : 1'b0;
+    assign in_mode_2  = (ppu_mode == OAM_SCAN) ? 1'b1 : 1'b0;
+    assign irq_vblank = (ppu_mode == VBLANK);
 
     /* DMG PPU CONTROL REGISTERS (0xFF40-0xFF4B)
         0xFF40 - LCDC (LCD Control Register)
@@ -137,7 +137,6 @@ module gb_ppu (
             reg_STAT  <= 8'h00;
             reg_SCY   <= 8'h00;
             reg_SCX   <= 8'h00;
-            reg_LY    <= 8'h00;
             reg_LYC   <= 8'h00;
             reg_DMA   <= 8'h00;
             reg_BGP   <= 8'h00;
@@ -167,7 +166,62 @@ module gb_ppu (
         end
 
 
-    // Object Rendering
+    /* OBJECT RENDERING
+
+    These are all based around the T-Clock (~4MHz)
+
+    Rendering occurs in FRAMES, which are comprised of 154 SCANLINES
+     - Each scanline has a duration of 456 T-Clock cycles
+     - The current scanline is stored in the LY register
+     - The PPU cycles between OAM_SCAN, DRAW_PIXEL, HBLANK for scanlines 0-143
+     - The PPU stalls in VBLANK for scanlines 144-153
+
+    OAM_SCAN
+     - always 80 T-Clock cycles
+     - search OAM for up to 10 objects on the current line
+     - VRAM is accessible to CPU, OAM is NOT accessible to CPU
+     - CGB Palettes are accessible to CPU
+
+    Note: the COMBINED duration of DRAW_PIXEL and HBLANK is ALWAYS a FIXED
+          duration of 376 T-Clock cycles
+
+    DRAW_PIXEL
+     - use Pixel FIFO structures to push rendered pixels to the screen
+     - lasts between (172-289) T-Clock cycles
+     - VRAM and OAM are NOT accessible to CPU
+     - CBG Palettes are NOT accessible to CPU
+
+    HBLANK
+     - downtime between drawing a line and starting next OAM_SCAN
+     - (376 - duration of DRAW_PIXEL) T-Clock cycles
+     - VRAM and OAM are accessible to CPU
+     - CBG Palettes are accessible to CPU
+
+    VBLANK
+     - always 10 scanlines, 4560 T-Clock cycles
+     - VRAM and OAM are accessible to CPU
+     - CBG Palettes are accessible to CPU
+    */
+
+    // Register LY is READ-ONLY to the CPU, it acts as our scanline counter
+    // We store a running counter that increments LY every 456 T-Clock cycles,
+    // and resets LY back to zero to keep it in the range (0-153)
+    logic [8:0] reg_LY_counter;
+    always_ff @(posedge clk_t, reset)
+        if (reset) begin
+            reg_LY <= 8'd0;
+            reg_LY_counter <= 9'd0;
+        end else begin
+            if (reg_LY_counter == 9'd455) begin
+                reg_LY <= (reg_LY == 8'd153) ? 8'd0 : reg_LY + 8'd1;
+                reg_LY_counter <= 9'd0;
+            end else begin
+                reg_LY <= reg_LY;
+                reg_LY_counter <= reg_LY_counter + 9'd1;
+            end
+        end
+
+
 
     // For the OAM Scan stage, we grab objects that appear on the scanline
     // We need to store up to 10 valid objects per scanline, and keep track of
@@ -178,9 +232,9 @@ module gb_ppu (
     // we need the following info:
     //  - a 'valid' bit (up to 10 objects, not all slots are used)
     //    - this will be modified during the OAM scan
-    // in addition, when feeding the FIFO buffer we cascade the valid objects
+    // in addition, when feeding the object FIFO we cascade the valid objects
     //  - value in-frame with the lowest x value gets priority
-    //  - what if partial in frame? do we pad with 'transparent'?
+    //  - what if partially in frame? do we pad with 'transparent'?
     obj_buffer_t [9:0] obj_buffer;
     logic [3:0] num_objects_found, curr_obj_buffer_index;
 
@@ -201,17 +255,19 @@ module gb_ppu (
     assign bg_tile_map_base_ptr  = LCDC.bg_tile_map ? 16'h9C00 : 16'h9800;
     assign win_tile_map_base_ptr = LCDC.win_tile_map ? 16'h9C00 : 16'h9800;
 
-    // Tile Data (0x8000-0x97FF) stores 384 8x8 tiles
-    // Each tile is 16 Bytes, where each line of the byte is stored in 2 bytes,
-    // the combination of these bytes represents the palette ID for the pixel.
+    /* Tile Data (0x8000-0x97FF) stores 384 8x8 tiles
 
-    /* How Tile Data Bytes are interpreted:
+    Each tile is 16 Bytes, where each line of the tile is stored in 2 bytes,
+    the combination of these bytes represents the palette ID for the pixel.
+
+    How Tile Data Bytes are interpreted:
 
     Byte 0 [7:0]            -  a  b  c  d  e  f  g  h
     Byte 1 [7:0]            -  i  j  k  l  m  n  o  p
     pixels (left to right)  - ia jb kc ld me nf og ph
-        - pixel values are a palette index
-        - note that MSb is the leftmost, and Byte 1 is MSb for palette index
+        - pixel values indicate a palette index
+        - note that msb is the leftmost value, and the palette index is
+          interpreted as {Byte1[index], Byte0[index]}
     */
 
     // Base Pointer for BG/Window tile data fetch
