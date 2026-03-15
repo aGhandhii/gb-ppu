@@ -8,6 +8,7 @@ Inputs:
     reset           - System Reset
     addr            - 16-Bit Address Bus
     data_i          - 8-Bit Input Data
+    wren_cpu        - Write Enable from the CPU
 
 Outputs:
     ppu_mode        - Current PPU Mode
@@ -23,12 +24,13 @@ module gb_ppu (
     input  logic                   reset,
     input  logic            [15:0] addr,
     input  logic            [ 7:0] data_i,
+    input  logic                   wren_cpu,
     output ppu_mode_state_t        ppu_mode,
     output logic            [ 7:0] data_o,
     output logic                   irq_vblank,
     output logic                   irq_stat,
     output logic                   dma_start,
-    output logic                   dma_start_addr
+    output logic            [15:0] dma_start_addr
 );
 
     // For Interrupts, store whether PPU is in certain state
@@ -52,8 +54,11 @@ module gb_ppu (
         0xFF4A - WY   (Window Y Position)
         0xFF4B - WX   (Window X Position + 7)
     */
-    logic [7:0]
-        reg_LCDC, reg_STAT, reg_SCY, reg_SCX, reg_LY, reg_LYC, reg_DMA, reg_BGP, reg_OBP0, reg_OBP1, reg_WY, reg_WX;
+    logic [7:0] reg_LCDC, reg_SCY, reg_SCX, reg_LY, reg_LYC, reg_DMA, reg_BGP, reg_OBP0, reg_OBP1, reg_WY, reg_WX;
+
+    // We need to split the STAT register for simulation/synthesis compliance
+    logic [7:3] reg_STAT_hi;
+    logic [2:0] reg_STAT_lo;
 
     // We want an additional register to store the current X-Coordinate
     logic [7:0] reg_LX;
@@ -74,15 +79,15 @@ module gb_ppu (
     // Store LCD Status Signals
     lcd_status_t STAT;
     always_comb begin : setSTATsignals
-        STAT.lyc_irq_cond    = reg_STAT[6];
-        STAT.mode_2_irq_cond = reg_STAT[5];
-        STAT.mode_1_irq_cond = reg_STAT[4];
-        STAT.mode_0_irq_cond = reg_STAT[3];
+        STAT.lyc_irq_cond    = reg_STAT_hi[6];
+        STAT.mode_2_irq_cond = reg_STAT_hi[5];
+        STAT.mode_1_irq_cond = reg_STAT_hi[4];
+        STAT.mode_0_irq_cond = reg_STAT_hi[3];
         STAT.lyc_ly_compare  = (reg_LY == reg_LYC) ? 1'b1 : 1'b0;
         STAT.ppu_mode        = ppu_mode;
     end : setSTATsignals
-    assign reg_STAT[2] = STAT.lyc_ly_compare;
-    assign reg_STAT[1:0] = STAT.ppu_mode;
+    assign reg_STAT_lo[2] = STAT.lyc_ly_compare;
+    assign reg_STAT_lo[1:0] = STAT.ppu_mode;
 
     // Handle the STAT Interrupt Request
     assign irq_stat = (STAT.lyc_ly_compare & STAT.lyc_irq_cond) |
@@ -114,7 +119,7 @@ module gb_ppu (
     always_comb begin : PPUregRead
         case (addr) inside
             16'hFF40: data_o = reg_LCDC;
-            16'hFF41: data_o = reg_STAT;
+            16'hFF41: data_o = {reg_STAT_hi, reg_STAT_lo};
             16'hFF42: data_o = reg_SCY;
             16'hFF43: data_o = reg_SCX;
             16'hFF44: data_o = reg_LY;
@@ -132,22 +137,22 @@ module gb_ppu (
     // PPU Register Writes and DMA Start Signal
     always_ff @(posedge clk_m, reset)
         if (reset) begin
-            dma_start <= 1'b0;
-            reg_LCDC  <= 8'h00;
-            reg_STAT  <= 8'h00;
-            reg_SCY   <= 8'h00;
-            reg_SCX   <= 8'h00;
-            reg_LYC   <= 8'h00;
-            reg_DMA   <= 8'h00;
-            reg_BGP   <= 8'h00;
-            reg_OBP0  <= 8'h00;
-            reg_OBP1  <= 8'h00;
-            reg_WY    <= 8'h00;
-            reg_WX    <= 8'h00;
+            dma_start   <= 1'b0;
+            reg_LCDC    <= 8'h00;
+            reg_STAT_hi <= 5'h00;
+            reg_SCY     <= 8'h00;
+            reg_SCX     <= 8'h00;
+            reg_LYC     <= 8'h00;
+            reg_DMA     <= 8'h00;
+            reg_BGP     <= 8'h00;
+            reg_OBP0    <= 8'h00;
+            reg_OBP1    <= 8'h00;
+            reg_WY      <= 8'h00;
+            reg_WX      <= 8'h00;
         end else if (wren_cpu) begin
             case (addr) inside
                 16'hFF40: reg_LCDC <= data_i;
-                16'hFF41: reg_STAT[7:3] <= data_i[7:3];
+                16'hFF41: reg_STAT_hi <= data_i[7:3];
                 16'hFF42: reg_SCY <= data_i;
                 16'hFF43: reg_SCX <= data_i;
                 16'hFF45: reg_LYC <= data_i;
@@ -160,8 +165,9 @@ module gb_ppu (
                 16'hFF49: reg_OBP1 <= data_i;
                 16'hFF4A: reg_WY <= data_i;
                 16'hFF4B: reg_WX <= data_i;
+                default:  ;
             endcase
-        end else if (dma_start && ~(wren && (addr == 16'hFF46))) begin
+        end else if (dma_start && ~(wren_cpu && (addr == 16'hFF46))) begin
             dma_start <= 1'b0;
         end
 
@@ -221,6 +227,19 @@ module gb_ppu (
             end
         end
 
+    // Sequential PPU State Progression
+    // we can reuse the reg_LY_counter for tracking state duration
+    always_ff @(posedge clk_t, reset)
+        if (reset) ppu_mode <= OAM_SCAN;
+        else begin
+            if ((ppu_mode == OAM_SCAN) && (reg_LY_counter == 9'd79)) ppu_mode <= DRAW_PIXEL;
+            else if ((ppu_mode == DRAW_PIXEL) && (reg_LX == 8'd160)) ppu_mode <= HBLANK;
+            else if ((ppu_mode == HBLANK) && (reg_LY_counter == 9'd455))
+                ppu_mode <= (reg_LY == 8'd143) ? VBLANK : OAM_SCAN;
+            else if ((ppu_mode == VBLANK) && (reg_LY_counter == 9'd455))
+                ppu_mode <= (reg_LY == 8'd153) ? OAM_SCAN : VBLANK;
+            else ppu_mode <= ppu_mode;
+        end
 
 
     // For the OAM Scan stage, we grab objects that appear on the scanline
