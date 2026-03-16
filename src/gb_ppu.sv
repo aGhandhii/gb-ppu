@@ -9,6 +9,7 @@ Inputs:
     addr            - 16-Bit Address Bus
     data_i          - 8-Bit Input Data
     wren_cpu        - Write Enable from the CPU
+    oam_obj_i       - Requested OAM Objects
 
 Outputs:
     ppu_mode        - Current PPU Mode
@@ -17,6 +18,7 @@ Outputs:
     irq_stat        - STAT Interrupt Request Line
     dma_start       - Start DMA Transfer
     dma_start_addr  - Start Address for DMA Transfer
+    oam_index_o     - Index for searching OAM Objects
 */
 module gb_ppu (
     input  logic                   clk_t,
@@ -25,12 +27,14 @@ module gb_ppu (
     input  logic            [15:0] addr,
     input  logic            [ 7:0] data_i,
     input  logic                   wren_cpu,
+    input  oam_obj_t               oam_obj_i,
     output ppu_mode_state_t        ppu_mode,
     output logic            [ 7:0] data_o,
     output logic                   irq_vblank,
     output logic                   irq_stat,
     output logic                   dma_start,
-    output logic            [15:0] dma_start_addr
+    output logic            [15:0] dma_start_addr,
+    output logic            [ 5:0] oam_index_o
 );
 
     // For Interrupts, store whether PPU is in certain state
@@ -38,7 +42,7 @@ module gb_ppu (
     assign in_mode_0  = (ppu_mode == HBLANK) ? 1'b1 : 1'b0;
     assign in_mode_1  = (ppu_mode == VBLANK) ? 1'b1 : 1'b0;
     assign in_mode_2  = (ppu_mode == OAM_SCAN) ? 1'b1 : 1'b0;
-    assign irq_vblank = (ppu_mode == VBLANK);
+    assign irq_vblank = (ppu_mode == VBLANK) ? 1'b1 : 1'b0;
 
     /* DMG PPU CONTROL REGISTERS (0xFF40-0xFF4B)
         0xFF40 - LCDC (LCD Control Register)
@@ -255,7 +259,34 @@ module gb_ppu (
     //  - value in-frame with the lowest x value gets priority
     //  - what if partially in frame? do we pad with 'transparent'?
     obj_buffer_t [9:0] obj_buffer;
-    logic [3:0] num_objects_found, curr_obj_buffer_index;
+    logic [3:0] num_objects_found;
+    logic oam_scan_stall;  // OAM_SCAN takes 80 cycles, we only need 40
+
+    // Sequential logic for OAM_SCAN
+    always_ff @(posedge clk_t, reset)
+        if (reset) begin
+            for (integer i = 0; i < 10; i++) obj_buffer[i].isValid <= 1'b0;
+            num_objects_found <= 4'd0;
+            oam_scan_stall    <= 1'b0;
+            oam_index_o       <= 6'd0;
+        end else begin
+            if (ppu_mode == OAM_SCAN)
+                if (oam_scan_stall) oam_scan_stall <= 1'b0;
+                else begin
+                    // check if object lands on current scanline
+                    // what constitutes a hit??
+                    // recall that sprite y-pos value is offset by 16, so a y-val of 0 is offscreen,
+                    // but a y-val of 1 would be onscreen if the sprite is in 8x16 mode
+
+                    // if its a hit, increment num_objects_found
+
+                    // increment oam index, set back to zero at end
+
+                    // toggle oam_scan_stall
+                    oam_scan_stall <= 1'b1;
+                end
+            else if (ppu_mode == HBLANK) num_objects_found <= 4'd0;
+        end
 
 
     // Background and Window Rendering

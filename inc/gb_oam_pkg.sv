@@ -14,7 +14,7 @@ package gb_oam_pkg;
     // Object Buffer data type for the PPU
     // Used to hold objects to render in a frame
     typedef struct packed {
-        oam_obj_t obj_buffer;
+        oam_obj_t object;
         logic     isValid;
     } obj_buffer_t;
 

@@ -25,7 +25,6 @@ package gb_ppu_common_pkg;
         BLACK      = 2'b11
     } pixel_color_t;
 
-
     // Each Pixel in the FIFO contains these properties
     typedef struct packed {
         logic [1:0] color_index;  // Palette ID

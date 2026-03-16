@@ -24,6 +24,7 @@ Outputs:
     addr_dma_o      - DMA Address Line
 
     data_o          - 8-Bit Output Data from OAM
+
     obj_o           - Output OAM Object from Requested Index for PPU
 
 */
@@ -37,7 +38,7 @@ module gb_oam_dma (
     input  logic     [15:0] addr_cpu_i,
     input  logic     [ 7:0] data_cpu_i,
     input  logic            wren_cpu,
-    input  logic     [ 6:0] index_ppu_i,
+    input  logic     [ 5:0] index_ppu_i,
     output logic            dma_active,
     output logic     [15:0] addr_dma_o,
     output logic     [ 7:0] data_o,
