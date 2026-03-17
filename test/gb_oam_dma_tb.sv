@@ -12,7 +12,7 @@ module gb_oam_dma_tb ();
     logic     [15:0] addr_cpu_i;
     logic     [ 7:0] data_cpu_i;
     logic            wren_cpu;
-    logic     [ 6:0] index_ppu_i;
+    logic     [ 5:0] index_ppu_i;
     logic            dma_active;
     logic     [15:0] addr_dma_o;
     logic     [ 7:0] data_o;

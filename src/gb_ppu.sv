@@ -19,6 +19,11 @@ Outputs:
     dma_start       - Start DMA Transfer
     dma_start_addr  - Start Address for DMA Transfer
     oam_index_o     - Index for searching OAM Objects
+
+    I might need dual-port read access to VRAM
+    - one for BG/Window
+    - one for tiles corresponding to OAM
+    This is for the Pixel Fetcher
 */
 module gb_ppu (
     input  logic                   clk_t,
@@ -233,6 +238,9 @@ module gb_ppu (
 
     // Sequential PPU State Progression
     // we can reuse the reg_LY_counter for tracking state duration
+    // TODO: transition from DRAW_PIXEL to HBLANK might need refining
+    //       I want to avoid a dead cycle where OAM_SCAN doesnt begin
+    //       maybe increment if a valid pixel is being pushed?
     always_ff @(posedge clk_t, reset)
         if (reset) ppu_mode <= OAM_SCAN;
         else begin
@@ -277,6 +285,7 @@ module gb_ppu (
                     // what constitutes a hit??
                     // recall that sprite y-pos value is offset by 16, so a y-val of 0 is offscreen,
                     // but a y-val of 1 would be onscreen if the sprite is in 8x16 mode
+                    // and a y-val of 9 is onscreen in 8x8 or 8x16 mode
 
                     // if its a hit, increment num_objects_found
 
@@ -285,19 +294,25 @@ module gb_ppu (
                     // toggle oam_scan_stall
                     oam_scan_stall <= 1'b1;
                 end
-            else if (ppu_mode == HBLANK) num_objects_found <= 4'd0;
+            else if (ppu_mode == HBLANK) begin
+                num_objects_found <= 4'd0;
+                oam_scan_stall    <= 1'b0;
+            end
         end
 
 
     // Background and Window Rendering
 
-    // These point to Tile Maps (0x9800-0x9BFF and 0x9C00-0x9FFF)
-    // which are two 32x32 maps of 1-byte indices for tile data lookup.
-    // When combined with a base index specified in LCDC, this gets the address
-    // in Tile Data to render.
-    // The tile index is multiplied by 16 (add 4'b0000 to right end) then
-    // optionally sign-extended, for a total of 16 bits. This points to the
-    // first byte in the 16-byte section for a tile
+    /* Tile Maps (0x9800-0x9BFF and 0x9C00-0x9FFF) are two 32x32 maps
+       of 1-byte indices for tile data lookup.
+
+    When combined with a base index specified in LCDC, this gets the address
+    in Tile Data to render.
+
+    The tile index is multiplied by 16 (add 4'b0000 to right end) then
+    optionally sign-extended, for a total of 16 bits. This points to the
+    first byte in the 16-byte section for a tile
+    */
 
     // Base pointer for BG/Window tile map fetch
     logic [15:0] bg_tile_map_base_ptr;

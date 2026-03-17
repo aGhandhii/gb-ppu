@@ -11,12 +11,14 @@ module gb_ppu_tb ();
     logic            [15:0] addr;
     logic            [ 7:0] data_i;
     logic                   wren_cpu;
+    oam_obj_t               oam_obj_i;
     ppu_mode_state_t        ppu_mode;
     logic            [ 7:0] data_o;
     logic                   irq_vblank;
     logic                   irq_stat;
     logic                   dma_start;
     logic            [15:0] dma_start_addr;
+    logic            [ 5:0] oam_index_o;
 
     // Instance
     gb_ppu dut (.*);
@@ -30,11 +32,18 @@ module gb_ppu_tb ();
         forever #10 cntr = cntr + 3'd1;
     end
 
+    task automatic sysReset();
+        reset = 1'b1;
+        @(posedge clk_t);
+        reset = 1'b0;
+    endtask : sysReset
+
     // Testbench
     initial begin
         $dumpfile("gb_ppu_tb.fst");
         $dumpvars();
 
+        sysReset();
         repeat (9999) @(posedge clk_t);
 
         $finish();

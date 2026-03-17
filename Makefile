@@ -1,7 +1,6 @@
 # Conditional Compilation Rules
 WAVES           =
-ICARUS          =
-VERILATOR       = 1
+SIM 			= verilator
 
 # Setup
 PROJ            = Project
@@ -42,7 +41,7 @@ prog: $(BUILD_DIR)/$(PROJ).bin
 	iceprog $(BUILD_DIR)/$(PROJ).bin
 
 sv2v:
-ifdef ICARUS
+ifeq ($(SIM), icarus)
 	# Convert SystemVerilog to Verilog - needed for Icarus
 	mkdir -p $(SV2V_DIR)
 	sv2v --write=$(SV2V_DIR) --top=$(TOP) $(TESTBENCH) $(RTL_FILES)
@@ -50,7 +49,7 @@ endif
 
 test: sv2v
 	mkdir -p $(SIM_DIR)
-ifdef ICARUS
+ifeq ($(SIM), icarus)
 	# Simulate the design with Icarus
 	iverilog -o $(TEST_BIN) -s $(TOP) $(shell find ./sv2v -name '*.v')
 	# Run simulation results
@@ -58,18 +57,19 @@ ifdef ICARUS
 ifdef WAVES
 	# Loading Waveform
 	mv $(TOP).fst $(TEST_WAVE) &> /dev/null
-	surfer $(TEST_WAVE) &
 endif
-endif
-ifdef VERILATOR
+else ifeq ($(SIM), verilator)
 	# Verilate the design
+ifdef WAVES
 	verilator -CFLAGS -fcoroutines --binary --timing --trace-structs --trace-params --trace-fst --assert --top-module $(TOP) $(RTL_FILES) $(TESTBENCH)
+else
+	verilator -CFLAGS -fcoroutines --binary --timing --assert --top-module $(TOP) $(RTL_FILES) $(TESTBENCH)
+endif
 	# Dump the simulation log
 	$(VERILATOR_DIR)/V$(TOP) > $(TEST_LOG)
 	cat $(TEST_LOG)
-	mv $(TOP).fst $(TEST_WAVE) &> /dev/null
 ifdef WAVES
-	surfer $(TEST_WAVE) &
+	mv $(TOP).fst $(TEST_WAVE) &> /dev/null
 endif
 endif
 
