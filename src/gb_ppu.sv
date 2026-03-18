@@ -257,48 +257,37 @@ module gb_ppu (
     // For the OAM Scan stage, we grab objects that appear on the scanline
     // We need to store up to 10 valid objects per scanline, and keep track of
     // how many valid objects we obtain
-
-    // IDEA
-    // the object buffer will store validity as well as the OAM object
-    // we need the following info:
-    //  - a 'valid' bit (up to 10 objects, not all slots are used)
-    //    - this will be modified during the OAM scan
-    // in addition, when feeding the object FIFO we cascade the valid objects
-    //  - value in-frame with the lowest x value gets priority
-    //  - what if partially in frame? do we pad with 'transparent'?
     obj_buffer_t [9:0] obj_buffer;
     logic [3:0] num_objects_found;
     logic oam_scan_stall;  // OAM_SCAN takes 80 cycles, we only need 40
 
-    // Sequential logic for OAM_SCAN
+    // OAM_SCAN Function - grab up to 10 objects on current scanline
     always_ff @(posedge clk_t, reset)
-        if (reset) begin
+        if (reset || (ppu_mode == HBLANK)) begin
+            // invalidate all objects in the buffer
             for (integer i = 0; i < 10; i++) obj_buffer[i].isValid <= 1'b0;
             num_objects_found <= 4'd0;
             oam_scan_stall    <= 1'b0;
             oam_index_o       <= 6'd0;
-        end else begin
-            if (ppu_mode == OAM_SCAN)
-                if (oam_scan_stall) oam_scan_stall <= 1'b0;
-                else begin
+        end else if (ppu_mode == OAM_SCAN)
+            if (oam_scan_stall) begin
+                oam_scan_stall <= 1'b0;
+            end else begin
+                if (num_objects_found < 4'd10) begin
                     // check if object lands on current scanline
-                    // what constitutes a hit??
-                    // recall that sprite y-pos value is offset by 16, so a y-val of 0 is offscreen,
-                    // but a y-val of 1 would be onscreen if the sprite is in 8x16 mode
-                    // and a y-val of 9 is onscreen in 8x8 or 8x16 mode
-
-                    // if its a hit, increment num_objects_found
-
-                    // increment oam index, set back to zero at end
-
-                    // toggle oam_scan_stall
-                    oam_scan_stall <= 1'b1;
+                    if (objectOnScanline(
+                            .obj_y_pos(oam_obj_i.y_position), .reg_LY(reg_LY), .obj_size(LCDC.obj_size)
+                        )) begin
+                        obj_buffer[num_objects_found].object  <= oam_obj_i;
+                        obj_buffer[num_objects_found].isValid <= 1'b1;
+                        num_objects_found                     <= num_objects_found + 4'd1;
+                    end
                 end
-            else if (ppu_mode == HBLANK) begin
-                num_objects_found <= 4'd0;
-                oam_scan_stall    <= 1'b0;
+                // increment oam index
+                oam_index_o <= oam_index_o + 6'd1;
+                // stall on next cycle to fetch oam object
+                oam_scan_stall <= 1'b1;
             end
-        end
 
 
     // Background and Window Rendering
