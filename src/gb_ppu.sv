@@ -181,7 +181,7 @@ module gb_ppu (
         end
 
 
-    /* OBJECT RENDERING
+    /* PPU RENDERING
 
     These are all based around the T-Clock (~4MHz)
 
@@ -275,9 +275,7 @@ module gb_ppu (
             end else begin
                 if (num_objects_found < 4'd10) begin
                     // check if object lands on current scanline
-                    if (objectOnScanline(
-                            .obj_y_pos(oam_obj_i.y_position), .reg_LY(reg_LY), .obj_size(LCDC.obj_size)
-                        )) begin
+                    if (objectOnScanline(.obj_y_pos(oam_obj_i.y_position), .Y(reg_LY), .obj_size(LCDC.obj_size))) begin
                         obj_buffer[num_objects_found].object  <= oam_obj_i;
                         obj_buffer[num_objects_found].isValid <= 1'b1;
                         num_objects_found                     <= num_objects_found + 4'd1;
