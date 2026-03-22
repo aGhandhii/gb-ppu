@@ -1,6 +1,6 @@
 # Conditional Compilation Rules
 WAVES           =
-SIM 			= verilator
+SIM             = verilator
 
 # Setup
 PROJ            = Project
@@ -20,9 +20,7 @@ RTL_FILES       = $(shell find ./inc -name '*.sv') $(shell find ./src -name '*.s
 # Synthesis Files
 PCF             = icebreaker.pcf
 
-.PHONY: all synth timing prog sv2v test clean
-
-all: synth
+.PHONY: synth timing prog sv2v test clean
 
 synth: $(BUILD_DIR)/$(PROJ).asc $(BUILD_DIR)/$(PROJ).bin
 	# Store build files separately
