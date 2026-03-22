@@ -11,7 +11,6 @@ package gb_oam_pkg;
         logic       dmg_palette;
     } oam_obj_t;
 
-
     // Object Buffer data type for the PPU
     // Used to hold objects to render in a frame
     typedef struct packed {
@@ -19,6 +18,8 @@ package gb_oam_pkg;
         logic     isValid;
     } obj_buffer_t;
 
+
+    // HELPER FUNCTIONS {{{
 
     // Determine if an object lands on a scanline
     function automatic logic objectOnScanline(logic [7:0] obj_y_pos, logic [7:0] Y, logic obj_size);
@@ -90,5 +91,7 @@ package gb_oam_pkg;
         return bestIndex;
 
     endfunction : objectBufferSearch
+
+    // }}}
 
 endpackage : gb_oam_pkg

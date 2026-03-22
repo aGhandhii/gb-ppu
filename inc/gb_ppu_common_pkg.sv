@@ -71,8 +71,6 @@ package gb_ppu_common_pkg;
 
     // Might use this space for simplified BG/Win tile address mapping
 
-    // could also be used for OAM cascading on pixel fetch
-
     // }}}
 
 endpackage : gb_ppu_common_pkg
