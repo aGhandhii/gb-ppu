@@ -69,19 +69,24 @@ package gb_oam_pkg;
 
         // Iterate object buffer elements to find the best match
         for (integer i = 0; i < 10; i++) begin
-            if (obj_buffer[i].isValid) begin
+            // OAM stores object x position + 8
+            logic [7:0] objX;
+            objX = obj_buffer[i].object.x_position;
+            // Ignore out-of-bounds X values
+            if (obj_buffer[i].isValid && (objX != 8'd0) && (objX < 8'd168)) begin
                 // store a local diff for this object
                 logic [7:0] xDiff;
                 // find the absolute difference from the input x position
-                if (obj_buffer[i].object.x_position > X) xDiff = obj_buffer[i].object.x_position - X;
-                else xDiff = X - obj_buffer[i].object.x_position;
+                // add 8 to input x position, this accounts for the OAM shift
+                if (objX > (X + 8'd8)) xDiff = objX - (X + 8'd8);
+                else xDiff = (X + 8'd8) - objX;
 
                 // Only consider objects that land in current tile
                 if (xDiff < 8'd8) begin
                     // update best values if possible
-                    if ((bestIndex == 4'hF) || (obj_buffer[i].object.x_position < bestObjX)) begin
+                    if ((bestIndex == 4'hF) || (objX < bestObjX)) begin
                         bestIndex = i[3:0];
-                        bestObjX  = obj_buffer[i].object.x_position;
+                        bestObjX  = objX;
                     end
                 end
             end
